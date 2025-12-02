@@ -78,6 +78,41 @@ CMD ["node", "server.js"]
 2. Build command: `npm run build`
 3. Output directory: `.next`
 
+### Beget
+
+Подробная инструкция в файле [BEGET_DEPLOY.md](./BEGET_DEPLOY.md)
+
+**Быстрый старт:**
+
+1. Подключитесь по SSH: `ssh ваш_логин@ваш_домен.beget.tech`
+2. Клонируйте репозиторий:
+   ```bash
+   cd ~
+   git clone https://github.com/zaharrrov001-hue/finans.git finance-app
+   cd finance-app
+   ```
+3. Установите зависимости и соберите:
+   ```bash
+   npm install
+   npm run build
+   ```
+4. Установите PM2 и запустите:
+   ```bash
+   npm install -g pm2
+   pm2 start ecosystem.config.js
+   pm2 save
+   ```
+5. Настройте Nginx через панель Beget (проксирование на `localhost:3000`)
+
+**Обновление:**
+```bash
+cd ~/finance-app
+git pull origin main
+npm install
+npm run build
+pm2 restart finance-app
+```
+
 ## ⚙️ Настройки
 
 ### OpenAI API Key
