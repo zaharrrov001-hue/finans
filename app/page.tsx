@@ -94,13 +94,13 @@ export default function Home() {
                 <div className="space-y-4 animate-slide-in-up">
                   <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
                     Категории
-                  </h1>
+          </h1>
                   <CategoryManager />
                 </div>
               )}
-            </div>
-          </div>
-        </main>
+        </div>
+        </div>
+      </main>
       </div>
 
       {/* Add/Edit Transaction Dialog */}
