@@ -16,6 +16,9 @@ function Progress({
   style,
   ...props
 }: ProgressProps) {
+  const progressBackground = style?.['--progress-background' as keyof typeof style];
+  const bgColor = typeof progressBackground === 'string' ? progressBackground : 'var(--primary)';
+  
   return (
     <ProgressPrimitive.Root
       data-slot="progress"
@@ -31,7 +34,7 @@ function Progress({
         className={cn("h-full w-full flex-1 transition-all", indicatorClassName)}
         style={{ 
           transform: `translateX(-${100 - (value || 0)}%)`,
-          backgroundColor: style?.['--progress-background' as keyof typeof style] || 'var(--primary)'
+          backgroundColor: bgColor
         }}
       />
     </ProgressPrimitive.Root>
