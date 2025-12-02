@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Оптимизация для production
-  output: 'standalone',
+  // Для Vercel не нужен standalone output
+  // output: 'standalone', // Только для собственных серверов
   
   // Оптимизация изображений
   images: {
@@ -11,11 +11,6 @@ const nextConfig: NextConfig = {
   
   // Отключаем строгий режим в production для стабильности
   reactStrictMode: false,
-  
-  // Настройки для Vercel/другого хостинга
-  experimental: {
-    // Оптимизация бандла
-  },
 };
 
 export default nextConfig;
