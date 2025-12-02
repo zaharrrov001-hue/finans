@@ -1,36 +1,129 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 💰 Финансовый Трекер
 
-## Getting Started
+Персональное приложение для учёта расходов и доходов с AI-ассистентом.
 
-First, run the development server:
+## ✨ Возможности
+
+- 📊 **Дашборд** — обзор финансов, баланс, статистика
+- 💸 **Расходы и доходы** — добавление операций (текст, голос, фото чека)
+- 🏷️ **Категории** — создание, редактирование, удаление категорий
+- 🎤 **Голосовой ввод** — распознавание речи на русском языке
+- 📷 **OCR** — сканирование чеков с автоматическим распознаванием суммы
+- 🤖 **AI Ассистент** — анализ расходов, ответы на вопросы, добавление категорий
+- ✨ **GPT категоризация** — автоматическое определение категорий операций
+- 👔 **Бизнес/Личный** — раздельный учёт бизнес и личных финансов
+- 📱 **PWA** — работает как приложение на телефоне
+
+## 🚀 Запуск
+
+### Локальная разработка
 
 ```bash
+# Установка зависимостей
+npm install
+
+# Запуск dev-сервера
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Открыть [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Production сборка
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Сборка
+npm run build
 
-## Learn More
+# Запуск
+npm start
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 🌐 Деплой на Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Создайте аккаунт на [Vercel](https://vercel.com)
+2. Подключите репозиторий GitHub
+3. Нажмите **Deploy**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Или используйте CLI:
 
-## Deploy on Vercel
+```bash
+npx vercel
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🌍 Деплой на другие хостинги
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Docker
+
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+### Netlify / Cloudflare Pages
+
+1. Подключите репозиторий
+2. Build command: `npm run build`
+3. Output directory: `.next`
+
+## ⚙️ Настройки
+
+### OpenAI API Key
+
+Для работы AI-ассистента и GPT-категоризации:
+
+1. Получите ключ на [OpenAI Platform](https://platform.openai.com/api-keys)
+2. В приложении: **Меню пользователя → Настройки → API ключ**
+
+## 📁 Структура проекта
+
+```
+finance-app/
+├── app/                  # Next.js App Router
+│   ├── page.tsx         # Главная страница
+│   ├── layout.tsx       # Layout
+│   └── globals.css      # Стили
+├── components/          # React компоненты
+│   ├── ai-chat.tsx      # AI Ассистент
+│   ├── add-transaction-dialog.tsx  # Добавление операций
+│   ├── dashboard.tsx    # Дашборд
+│   └── ui/              # UI компоненты (shadcn)
+├── lib/                 # Утилиты и сторы
+│   ├── store.ts         # Zustand store (финансы)
+│   ├── auth-store.ts    # Авторизация
+│   └── settings-store.ts # Настройки
+└── public/              # Статика
+```
+
+## 🔧 Технологии
+
+- **Next.js 16** — React фреймворк
+- **TypeScript** — типизация
+- **Tailwind CSS v4** — стили
+- **shadcn/ui** — UI компоненты
+- **Zustand** — state management
+- **Tesseract.js** — OCR
+- **OpenAI GPT-4o-mini** — AI
+
+## 📱 PWA
+
+Приложение можно установить на телефон:
+
+1. Откройте в браузере
+2. **Поделиться → Добавить на главный экран**
+
+---
+
+Made with ❤️
