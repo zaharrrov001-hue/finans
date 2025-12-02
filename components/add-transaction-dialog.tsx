@@ -30,7 +30,6 @@ import { ru } from 'date-fns/locale';
 import {
   CalendarIcon,
   Mic,
-  MicOff,
   Camera,
   X,
   Loader2,
@@ -225,10 +224,10 @@ export function AddTransactionDialog({
   const [skipParsing, setSkipParsing] = useState(false); // Флаг для пропуска парсинга
   const [isGPTCategorizing, setIsGPTCategorizing] = useState(false); // GPT категоризация
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Мемоизируем filteredCategories чтобы избежать бесконечного цикла
   const filteredCategories = useMemo(() => {
@@ -568,7 +567,7 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
 
       recognition.onstart = () => {
         setIsRecording(true);
-        toast.info('🎤 Говорите чётко: "кофе 300 бензин 700"', { duration: 3000 });
+        toast.info('🎤 Говорите чётко: "Молоко 120 бензин 1500"', { duration: 3000 });
       };
 
       recognition.onresult = (event: any) => {
@@ -807,7 +806,7 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
             </Label>
             <div className="relative">
               <Textarea
-                placeholder="кофе 300, сигареты парламент 230, бензин 700&#10;&#10;или голосом: кофе триста рублей"
+                placeholder="Молоко 120, бензин 1500&#10;&#10;или голосом: молоко сто двадцать рублей"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 className={cn(
@@ -963,21 +962,18 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
           <div className="flex gap-2">
             <Button
               type="button"
-              variant={isRecording ? 'destructive' : 'outline'}
-              className={cn("flex-1 h-12", isRecording && "animate-pulse")}
+              variant={isRecording ? 'default' : 'outline'}
+              className={cn(
+                "flex-1 h-12 transition-all",
+                isRecording && "bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/30"
+              )}
               onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
             >
-              {isRecording ? (
-                <>
-                  <MicOff className="h-5 w-5 mr-2" />
-                  Стоп
-                </>
-              ) : (
-                <>
-                  <Mic className="h-5 w-5 mr-2" />
-                  Голос
-                </>
-              )}
+              <Mic className={cn(
+                "h-5 w-5 mr-2",
+                isRecording && "animate-pulse"
+              )} />
+              {isRecording ? "Запись..." : "Голос"}
             </Button>
           </div>
 
@@ -985,69 +981,59 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
           <div className="space-y-2">
             <Label className="text-zinc-500 text-xs">Прикрепить фото или файл</Label>
             <div className="flex gap-2">
-              {/* Камера (сделать фото) */}
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 h-11"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessingOCR}
-              >
-                {isProcessingOCR ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Camera className="h-4 w-4 mr-2" />
+              {/* Фото */}
+              <label
+                htmlFor="photo-input"
+                className={cn(
+                  "flex-1 h-11 flex items-center justify-center gap-2 rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors",
+                  isProcessingOCR && "opacity-50 pointer-events-none"
                 )}
-                Камера
-              </Button>
-              
-              {/* Галерея (выбрать фото) */}
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 h-11"
-                onClick={() => galleryInputRef.current?.click()}
-                disabled={isProcessingOCR}
               >
-                <Image className="h-4 w-4 mr-2" />
-                Галерея
-              </Button>
+                <input
+                  ref={photoInputRef}
+                  id="photo-input"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileSelect}
+                  disabled={isProcessingOCR}
+                  className="sr-only"
+                />
+                {isProcessingOCR ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Обработка...
+                  </>
+                ) : (
+                  <>
+                    <Image className="h-4 w-4" />
+                    Фото
+                  </>
+                )}
+              </label>
               
-              {/* Файл (PDF и др.) */}
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 h-11"
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
-                  input.onchange = (e) => handleFileSelect(e as any);
-                  input.click();
-                }}
+              {/* Файл */}
+              <label
+                htmlFor="file-input"
+                className={cn(
+                  "flex-1 h-11 flex items-center justify-center gap-2 rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors",
+                  isProcessingOCR && "opacity-50 pointer-events-none"
+                )}
               >
-                <Paperclip className="h-4 w-4 mr-2" />
+                <input
+                  ref={fileInputRef}
+                  id="file-input"
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif,.webp,image/*"
+                  multiple
+                  onChange={handleFileSelect}
+                  disabled={isProcessingOCR}
+                  className="sr-only"
+                />
+                <Paperclip className="h-4 w-4" />
                 Файл
-              </Button>
+              </label>
             </div>
-            
-            {/* Hidden inputs */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <input
-              ref={galleryInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-            />
           </div>
 
           {/* Прикреплённые файлы */}
@@ -1107,6 +1093,7 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
     </Dialog>
   );
 }
+
 
 
 

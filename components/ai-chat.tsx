@@ -21,7 +21,6 @@ import {
   TrendingDown,
   PieChart,
   Mic,
-  MicOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -468,20 +467,19 @@ ${context.recentTransactions.length > 0 ? context.recentTransactions.map(t => `â
           >
             <Button
               type="button"
-              variant={isRecording ? 'destructive' : 'outline'}
+              variant={isRecording ? 'default' : 'outline'}
               size="icon"
               onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
               disabled={isLoading}
               className={cn(
-                "shrink-0 h-10 w-10",
-                isRecording && "animate-pulse"
+                "shrink-0 h-10 w-10 transition-all",
+                isRecording && "bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/30"
               )}
             >
-              {isRecording ? (
-                <MicOff className="h-4 w-4" />
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
+              <Mic className={cn(
+                "h-4 w-4",
+                isRecording && "animate-pulse"
+              )} />
             </Button>
             <Input
               ref={inputRef}
@@ -511,6 +509,7 @@ ${context.recentTransactions.length > 0 ? context.recentTransactions.map(t => `â
     </Dialog>
   );
 }
+
 
 
 

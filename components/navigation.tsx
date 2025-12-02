@@ -66,8 +66,8 @@ export function Navigation({ activeTab, onTabChange, onAddClick }: NavigationPro
               className={cn(
                 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all',
                 activeTab === item.id
-                  ? 'bg-zinc-900 text-white'
-                  : 'text-zinc-600 hover:bg-zinc-100'
+                  ? 'bg-zinc-700 text-white shadow-md'
+                  : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
               )}
             >
               <item.icon className="h-5 w-5" />
@@ -128,8 +128,8 @@ export function Navigation({ activeTab, onTabChange, onAddClick }: NavigationPro
                       className={cn(
                         'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all',
                         activeTab === item.id
-                          ? 'bg-zinc-900 text-white'
-                          : 'text-zinc-600 hover:bg-zinc-100'
+                          ? 'bg-zinc-700 text-white shadow-md'
+                          : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
                       )}
                     >
                       <item.icon className="h-5 w-5" />
@@ -169,6 +169,7 @@ export function Navigation({ activeTab, onTabChange, onAddClick }: NavigationPro
     </>
   );
 }
+
 
 
 
