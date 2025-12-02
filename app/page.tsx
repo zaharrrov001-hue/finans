@@ -119,7 +119,7 @@ export default function Home() {
       {/* AI Chat FAB Button */}
       <Button
         onClick={() => setIsAIChatOpen(true)}
-        className="fixed bottom-24 md:bottom-8 right-4 md:right-8 h-14 w-14 rounded-full bg-violet-500 hover:bg-violet-600 shadow-lg shadow-violet-500/25 z-40"
+        className="fixed bottom-24 md:bottom-8 right-4 md:right-8 h-14 w-14 rounded-full bg-zinc-700 hover:bg-zinc-600 shadow-lg shadow-zinc-900/30 z-40 transition-all hover:scale-105"
       >
         <Sparkles className="h-6 w-6" />
       </Button>

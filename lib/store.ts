@@ -48,7 +48,7 @@ interface FinanceStore {
   setAccountType: (type: AccountType) => void;
   
   // Categories
-  addCategory: (category: Omit<Category, 'id'>) => void;
+  addCategory: (category: Omit<Category, 'id'>) => string;
   updateCategory: (id: string, category: Partial<Category>) => void;
   deleteCategory: (id: string) => void;
   
@@ -90,6 +90,7 @@ export const useFinanceStore = create<FinanceStore>()(
         set((state) => ({
           categories: [...state.categories, newCategory],
         }));
+        return newCategory.id;
       },
       
       updateCategory: (id, updates) => {

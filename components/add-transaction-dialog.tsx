@@ -36,6 +36,9 @@ import {
   Loader2,
   Trash2,
   Sparkles,
+  Image,
+  Paperclip,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Tesseract from 'tesseract.js';
@@ -206,7 +209,7 @@ export function AddTransactionDialog({
   onOpenChange,
   editTransaction,
 }: AddTransactionDialogProps) {
-  const { categories, addTransaction, addMultipleTransactions, updateTransaction, currentAccountType, getFilteredCategories } = useFinanceStore();
+  const { categories, addTransaction, addMultipleTransactions, updateTransaction, currentAccountType, getFilteredCategories, addCategory } = useFinanceStore();
   const { autoCategorizationEnabled, openaiApiKey } = useSettingsStore();
   
   const [type, setType] = useState<TransactionType>('expense');
@@ -223,6 +226,7 @@ export function AddTransactionDialog({
   const [isGPTCategorizing, setIsGPTCategorizing] = useState(false); // GPT категоризация
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -331,16 +335,24 @@ export function AddTransactionDialog({
     setIsGPTCategorizing(true);
 
     try {
-      const categoryNames = filteredCategories.map(c => `${c.name} (${c.icon})`).join(', ');
+      const categoryList = filteredCategories.map(c => `${c.icon} ${c.name}`).join(', ');
       
-      const prompt = `Определи категории для следующих операций. 
-Доступные категории: ${categoryNames}
+      const prompt = `Определи категории для операций. Используй существующие категории или предложи новые с иконками.
 
-Операции:
+СУЩЕСТВУЮЩИЕ КАТЕГОРИИ: ${categoryList || 'пока нет'}
+
+ОПЕРАЦИИ:
 ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.amount}₽`).join('\n')}
 
-Ответь JSON массивом в формате: [{"index": 0, "category": "название категории"}]
-Только JSON, без объяснений. Если не можешь определить категорию - используй null.`;
+Ответь JSON массивом:
+[{"index": 0, "category": "название", "icon": "эмодзи", "isNew": false}]
+
+Правила:
+- Если подходит существующая категория - isNew: false, icon из существующей
+- Если нужна новая категория - isNew: true, подбери подходящую иконку-эмодзи
+- Иконки должны быть простые эмодзи: 🛒 🍽️ 🚗 💊 🎮 📱 👕 💇 🏠 💡 📚 ✈️ 🎁 💳 🏥 🐕 🌿 💪 🎬 🎵
+
+Только JSON, без объяснений.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -354,7 +366,7 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
             { role: 'user', content: prompt }
           ],
           temperature: 0.3,
-          max_tokens: 500,
+          max_tokens: 800,
         }),
       });
 
@@ -368,33 +380,55 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
       // Парсим JSON из ответа
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        const categories: { index: number; category: string | null }[] = JSON.parse(jsonMatch[0]);
+        const gptCategories: { index: number; category: string; icon: string; isNew: boolean }[] = JSON.parse(jsonMatch[0]);
         
         let categorizedCount = 0;
+        let newCategoriesCount = 0;
         const updatedItems = [...parsedItems];
         
-        categories.forEach(({ index, category }) => {
+        for (const { index, category, icon, isNew } of gptCategories) {
           if (category && itemsWithoutCategory[index]) {
             const originalItem = itemsWithoutCategory[index];
             const itemIndex = parsedItems.findIndex(p => p.id === originalItem.id);
+            
             if (itemIndex !== -1) {
-              const foundCat = filteredCategories.find(c => 
+              // Ищем существующую категорию
+              let foundCat = filteredCategories.find(c => 
                 c.name.toLowerCase() === category.toLowerCase() ||
                 c.name.toLowerCase().includes(category.toLowerCase()) ||
                 category.toLowerCase().includes(c.name.toLowerCase())
               );
+              
+              // Если не нашли и GPT предлагает новую - создаём
+              if (!foundCat && isNew) {
+                const newCatId = addCategory({
+                  name: category,
+                  type: type,
+                  icon: icon || '📁',
+                  color: '#6366f1',
+                  accountType: currentAccountType,
+                });
+                // Находим только что созданную категорию
+                foundCat = { id: newCatId, name: category, icon: icon || '📁', type, color: '#6366f1', accountType: currentAccountType };
+                newCategoriesCount++;
+              }
+              
               if (foundCat) {
                 updatedItems[itemIndex] = { ...updatedItems[itemIndex], categoryId: foundCat.id };
                 categorizedCount++;
               }
             }
           }
-        });
+        }
         
-        if (categorizedCount > 0) {
+        if (categorizedCount > 0 || newCategoriesCount > 0) {
           setSkipParsing(true);
           setParsedItems(updatedItems);
-          toast.success(`✨ GPT определил ${categorizedCount} ${categorizedCount === 1 ? 'категорию' : 'категорий'}`);
+          let message = `✨ GPT определил ${categorizedCount} ${categorizedCount === 1 ? 'категорию' : 'категорий'}`;
+          if (newCategoriesCount > 0) {
+            message += ` (+${newCategoriesCount} новых)`;
+          }
+          toast.success(message);
         } else {
           toast.info('GPT не смог определить категории');
         }
@@ -641,42 +675,64 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const imageUrl = event.target?.result as string;
-      setAttachments((prev) => [...prev, imageUrl]);
-
-      setIsProcessingOCR(true);
-      try {
-        const result = await Tesseract.recognize(imageUrl, 'rus');
-        const text = result.data.text;
+    for (const file of Array.from(files)) {
+      const isImage = file.type.startsWith('image/');
+      const isPDF = file.type === 'application/pdf';
+      
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const fileUrl = event.target?.result as string;
         
-        // Пробуем найти итоговую сумму
-        const amountMatch = text.match(/(?:итого|всего|сумма)[:\s]*(\d+[.,]?\d*)/i);
-        if (amountMatch) {
-          const amount = amountMatch[1].replace(',', '.');
-          setInput(prev => prev ? `${prev}, чек ${amount}` : `чек ${amount}`);
-          toast.success(`Распознано: ${amount} ₽`);
+        // Добавляем файл в attachments
+        setAttachments((prev) => [...prev, fileUrl]);
+        toast.success(`📎 Файл "${file.name}" добавлен`);
+
+        // OCR только для изображений
+        if (isImage) {
+          setIsProcessingOCR(true);
+          try {
+            const result = await Tesseract.recognize(fileUrl, 'rus');
+            const text = result.data.text;
+            
+            // Пробуем найти итоговую сумму
+            const amountMatch = text.match(/(?:итого|всего|сумма)[:\s]*(\d+[.,]?\d*)/i);
+            if (amountMatch) {
+              const amount = amountMatch[1].replace(',', '.');
+              setInput(prev => prev ? `${prev}, чек ${amount}` : `чек ${amount}`);
+              toast.success(`✓ Распознано: ${amount} ₽`);
+            } else {
+              toast.info('Сумма не найдена на чеке');
+            }
+          } catch (error) {
+            console.error('OCR Error:', error);
+            toast.error('Ошибка распознавания');
+          } finally {
+            setIsProcessingOCR(false);
+          }
+        } else if (isPDF) {
+          toast.info('PDF добавлен (OCR недоступен)');
         }
-      } catch (error) {
-        console.error('OCR Error:', error);
-      } finally {
-        setIsProcessingOCR(false);
-      }
-    };
-    reader.readAsDataURL(file);
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    // Очищаем input чтобы можно было выбрать тот же файл снова
+    e.target.value = '';
   };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ru-RU').format(amount);
   };
 
+  // Предотвращаем закрытие во время записи или обработки
+  const isProcessing = isRecording || isProcessingOCR || isGPTCategorizing;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={isProcessing ? undefined : onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" preventClose={isProcessing}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold flex items-center gap-2">
             {editTransaction ? 'Редактировать' : 'Новая операция'}
@@ -903,7 +959,7 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
             </Popover>
           </div>
 
-          {/* Голосовой ввод и фото */}
+          {/* Голосовой ввод */}
           <div className="flex gap-2">
             <Button
               type="button"
@@ -914,29 +970,68 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
               {isRecording ? (
                 <>
                   <MicOff className="h-5 w-5 mr-2" />
-                  Остановить
+                  Стоп
                 </>
               ) : (
                 <>
                   <Mic className="h-5 w-5 mr-2" />
-                  Голосом
+                  Голос
                 </>
               )}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1 h-12"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isProcessingOCR}
-            >
-              {isProcessingOCR ? (
-                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-              ) : (
-                <Camera className="h-5 w-5 mr-2" />
-              )}
-              Фото чека
-            </Button>
+          </div>
+
+          {/* Фото и файлы */}
+          <div className="space-y-2">
+            <Label className="text-zinc-500 text-xs">Прикрепить фото или файл</Label>
+            <div className="flex gap-2">
+              {/* Камера (сделать фото) */}
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-11"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessingOCR}
+              >
+                {isProcessingOCR ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4 mr-2" />
+                )}
+                Камера
+              </Button>
+              
+              {/* Галерея (выбрать фото) */}
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-11"
+                onClick={() => galleryInputRef.current?.click()}
+                disabled={isProcessingOCR}
+              >
+                <Image className="h-4 w-4 mr-2" />
+                Галерея
+              </Button>
+              
+              {/* Файл (PDF и др.) */}
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-11"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
+                  input.onchange = (e) => handleFileSelect(e as any);
+                  input.click();
+                }}
+              >
+                <Paperclip className="h-4 w-4 mr-2" />
+                Файл
+              </Button>
+            </div>
+            
+            {/* Hidden inputs */}
             <input
               ref={fileInputRef}
               type="file"
@@ -945,22 +1040,45 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
               onChange={handleFileSelect}
               className="hidden"
             />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
           </div>
 
           {/* Прикреплённые файлы */}
           {attachments.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {attachments.map((url, idx) => (
-                <div key={idx} className="relative group">
-                  <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border" />
-                  <button
-                    onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
-                    className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
+            <div className="space-y-2">
+              <Label className="text-zinc-500 text-xs">Прикреплено: {attachments.length}</Label>
+              <div className="flex gap-2 flex-wrap">
+                {attachments.map((url, idx) => {
+                  const isPDF = url.startsWith('data:application/pdf');
+                  const isDoc = url.includes('application/') && !isPDF;
+                  
+                  return (
+                    <div key={idx} className="relative group">
+                      {isPDF || isDoc ? (
+                        <div className="w-16 h-16 rounded-lg border bg-zinc-100 flex items-center justify-center">
+                          <FileText className="h-6 w-6 text-zinc-500" />
+                        </div>
+                      ) : (
+                        <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+                        className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

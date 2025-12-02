@@ -267,29 +267,47 @@ export function AIChat({ open, onOpenChange }: AIChatProps) {
     try {
       const context = getFinancialContext();
       
-      const systemPrompt = `Ты финансовый ассистент для приложения учёта расходов. Отвечай на русском языке, кратко и по делу.
+      const systemPrompt = `Ты умный финансовый ассистент. Понимаешь разговорную речь, сленг и неточные формулировки. Отвечай на русском, дружелюбно и по делу.
 
-Текущие данные пользователя (${context.accountType} счёт):
-- Месяц: ${context.currentMonth}
-- Расходы за месяц: ${context.thisMonthExpenses.toLocaleString()} ₽
-- Доходы за месяц: ${context.thisMonthIncome.toLocaleString()} ₽
-- Баланс: ${context.balance.toLocaleString()} ₽
-- Расходы прошлый месяц (${context.lastMonth}): ${context.lastMonthExpenses.toLocaleString()} ₽
-- Всего операций: ${context.totalTransactions}
-- Без категории: ${context.uncategorizedCount}
+ДАННЫЕ ПОЛЬЗОВАТЕЛЯ (${context.accountType} счёт, ${context.currentMonth}):
 
-Топ расходов по категориям:
-${context.topExpenses.map((e, i) => `${i + 1}. ${e.name}: ${e.amount.toLocaleString()} ₽ (${e.count} операций)`).join('\n')}
+📊 ФИНАНСЫ:
+• Баланс: ${context.balance.toLocaleString()} ₽
+• Доходы: +${context.thisMonthIncome.toLocaleString()} ₽
+• Расходы: -${context.thisMonthExpenses.toLocaleString()} ₽
+• Прошлый месяц (${context.lastMonth}): -${context.lastMonthExpenses.toLocaleString()} ₽
+• Операций: ${context.totalTransactions}, без категории: ${context.uncategorizedCount}
 
-Последние операции:
-${context.recentTransactions.map(t => `- ${t.description}: ${t.type === 'expense' ? '-' : '+'}${t.amount}₽ (${t.category}, ${t.date})`).join('\n')}
+📈 ТОП РАСХОДОВ ПО КАТЕГОРИЯМ:
+${context.topExpenses.length > 0 ? context.topExpenses.map((e, i) => `${i + 1}. ${e.name}: ${e.amount.toLocaleString()} ₽ (${e.count} оп.)`).join('\n') : 'Пока нет данных'}
 
-Существующие категории: ${context.categories.map(c => c.name).join(', ')}
+📝 ПОСЛЕДНИЕ ОПЕРАЦИИ:
+${context.recentTransactions.length > 0 ? context.recentTransactions.map(t => `• ${t.description}: ${t.type === 'expense' ? '-' : '+'}${t.amount}₽ [${t.category}] ${t.date}`).join('\n') : 'Пока нет операций'}
 
-Если пользователь просит добавить категорию, ответь в формате:
-[ADD_CATEGORY: название категории, тип (expense/income), иконка-эмодзи]
+🏷️ КАТЕГОРИИ: ${context.categories.map(c => `${c.icon || '📁'} ${c.name}`).join(', ')}
 
-Форматируй числа с пробелами (1 000 ₽). Используй эмодзи для наглядности.`;
+ИНСТРУКЦИИ:
+1. Понимай разные формулировки одного вопроса:
+   - "траты/расходы/потратил/ушло" = расходы
+   - "заработал/получил/пришло/доход" = доходы  
+   - "баланс/остаток/сколько осталось/на счету" = баланс
+   - "топ/больше всего/куда уходит" = топ расходов
+   - "еда/продукты/магазин" → категория Продукты
+   - "кафе/ресторан/кофе/обед" → категория Кафе и рестораны
+   - "такси/бензин/метро/транспорт" → категория Транспорт
+   - "развлечения/кино/игры" → категория Развлечения
+
+2. Анализируй данные умно:
+   - Сравнивай с прошлым месяцем
+   - Находи аномалии в тратах
+   - Давай персональные советы
+
+3. Для добавления категории используй формат:
+   [ADD_CATEGORY: название, тип (expense/income), эмодзи]
+
+4. Форматируй красиво: числа с пробелами (1 000 ₽), используй эмодзи.
+
+5. Будь кратким но информативным. Не повторяй вопрос пользователя.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -364,9 +382,9 @@ ${context.recentTransactions.map(t => `- ${t.description}: ${t.type === 'expense
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg h-[600px] flex flex-col p-0">
-        <DialogHeader className="px-4 py-3 border-b">
+        <DialogHeader className="px-4 py-3 border-b bg-zinc-50">
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-violet-500" />
+            <Sparkles className="h-5 w-5 text-zinc-600" />
             AI Ассистент
           </DialogTitle>
         </DialogHeader>
@@ -381,13 +399,13 @@ ${context.recentTransactions.map(t => `- ${t.description}: ${t.type === 'expense
               <div
                 className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
                   message.role === 'user'
-                    ? 'bg-violet-500 text-white'
+                    ? 'bg-zinc-700 text-white'
                     : 'bg-zinc-100 text-zinc-900'
                 }`}
               >
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 <div className="flex items-center justify-between mt-1.5 gap-2">
-                  <span className={`text-xs ${message.role === 'user' ? 'text-violet-200' : 'text-zinc-400'}`}>
+                  <span className={`text-xs ${message.role === 'user' ? 'text-zinc-300' : 'text-zinc-400'}`}>
                     {format(message.timestamp, 'HH:mm')}
                   </span>
                   {message.role === 'assistant' && (
@@ -410,7 +428,7 @@ ${context.recentTransactions.map(t => `- ${t.description}: ${t.type === 'expense
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-zinc-100 rounded-2xl px-4 py-3">
-                <Loader2 className="h-5 w-5 animate-spin text-violet-500" />
+                <Loader2 className="h-5 w-5 animate-spin text-zinc-600" />
               </div>
             </div>
           )}
@@ -479,7 +497,7 @@ ${context.recentTransactions.map(t => `- ${t.description}: ${t.type === 'expense
             <Button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="bg-violet-500 hover:bg-violet-600 shrink-0"
+              className="bg-zinc-700 hover:bg-zinc-600 shrink-0"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
