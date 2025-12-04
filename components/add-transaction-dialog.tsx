@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/lib/settings-store';
 import { findCategoryByKeywords } from '@/lib/ai-categorizer';
+import Tesseract from 'tesseract.js';
 
 interface AddTransactionDialogProps {
   open: boolean;
@@ -688,44 +689,58 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
         setAttachments((prev) => [...prev, fileUrl]);
         toast.success(`📎 Файл "${file.name}" добавлен`);
 
-        // Анализ изображений через GPT Vision
+        // Анализ изображений через Tesseract + парсинг
         if (isImage) {
           setIsProcessingOCR(true);
-          toast.info('🔍 Анализирую изображение...');
+          toast.info('🔍 Распознаю текст...');
           
           try {
+            // 1. Распознаём текст через Tesseract
+            const result = await Tesseract.recognize(fileUrl, 'rus+eng', {
+              logger: () => {} // Отключаем логи
+            });
+            const ocrText = result.data.text;
+            
+            if (!ocrText || ocrText.trim().length < 5) {
+              toast.error('Не удалось распознать текст на изображении');
+              setIsProcessingOCR(false);
+              return;
+            }
+            
+            toast.info('📝 Парсю операции...');
+            
+            // 2. Отправляем текст на сервер для парсинга
             const response = await fetch('/api/analyze-image', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                image: fileUrl,
-                categories: categories,
+                text: ocrText,
               }),
             });
             
             if (!response.ok) {
-              throw new Error('Ошибка API');
+              throw new Error('Ошибка парсинга');
             }
             
             const data = await response.json();
             
             if (data.items && data.items.length > 0) {
-              // Формируем строку из распознанных товаров
+              // Формируем строку из распознанных операций
               const itemsStr = data.items
                 .map((item: { name: string; amount: number }) => `${item.name} ${item.amount}`)
                 .join(', ');
               
               setInput(prev => prev ? `${prev}, ${itemsStr}` : itemsStr);
-              toast.success(`✓ Распознано: ${data.items.length} ${data.items.length === 1 ? 'товар' : 'товаров'}`);
+              toast.success(`✓ Распознано: ${data.items.length} ${data.items.length === 1 ? 'операция' : 'операций'}`);
             } else if (data.total) {
               setInput(prev => prev ? `${prev}, покупка ${data.total}` : `покупка ${data.total}`);
               toast.success(`✓ Найдена сумма: ${data.total} ₽`);
             } else {
-              toast.info('Не удалось распознать товары на изображении');
+              toast.info('Не удалось найти операции в тексте');
             }
           } catch (error) {
-            console.error('Image Analysis Error:', error);
-            toast.error('Ошибка распознавания. Проверьте настройки API.');
+            console.error('OCR Error:', error);
+            toast.error('Ошибка распознавания');
           } finally {
             setIsProcessingOCR(false);
           }
