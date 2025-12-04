@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// v2.0 - Google Cloud Vision + OpenAI fallback
 // Анализ через Google Cloud Vision
 async function analyzeWithGoogleVision(imageBase64: string) {
   const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
