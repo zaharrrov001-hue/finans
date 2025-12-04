@@ -5,7 +5,7 @@ import { useFinanceStore } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, Wallet, PieChart, Briefcase, User, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, PieChart, Briefcase, User } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { AccountType } from '@/lib/types';
@@ -79,80 +79,93 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </Tabs>
       </div>
 
-      {/* Единая карточка дашборда */}
-      <Card className="border-0 shadow-lg overflow-hidden">
-        {/* Баланс - градиентный хедер */}
-        <div 
-          className="bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 p-4 cursor-pointer hover:opacity-95 transition-opacity"
+      {/* 4 отдельных карточки 2x2 */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* 1. Баланс */}
+        <Card 
+          className="bg-gradient-to-br from-blue-500 to-indigo-600 border-0 shadow-lg cursor-pointer hover:shadow-xl transition-shadow"
           onClick={() => onNavigate?.('transactions')}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-white/70 mb-1">Баланс</p>
-              <div className="text-2xl font-bold text-white">
-                {formatCurrency(currentMonthStats.balance)}
-              </div>
-              <p className="text-[10px] text-white/60 mt-0.5">
-                {currentAccountType === 'personal' ? '👤 Личный счёт' : '💼 Бизнес счёт'}
-              </p>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-white/80">Баланс</p>
+              <Wallet className="h-4 w-4 text-white/80" />
             </div>
-            <div className="p-2 bg-white/20 rounded-xl">
-              <Wallet className="h-5 w-5 text-white" />
+            <div className="text-xl font-bold text-white">
+              {formatCurrency(currentMonthStats.balance)}
             </div>
-          </div>
-        </div>
-        
-        {/* Доходы и Расходы */}
-        <div className="grid grid-cols-2 divide-x divide-zinc-100">
-          {/* Доходы */}
-          <button 
-            className="p-3 hover:bg-emerald-50/50 transition-colors text-left group"
-            onClick={() => onNavigate?.('transactions', 'income')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-zinc-500">Доходы</p>
-                <div className="text-base font-bold text-emerald-600">
-                  +{formatCurrency(currentMonthStats.totalIncome)}
-                </div>
-                <p className="text-[10px] text-zinc-400">
-                  {filteredTransactions.filter(t => t.type === 'income').length} операций
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="p-1.5 bg-emerald-50 rounded-full">
-                  <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
-                </div>
-                <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-emerald-500 transition-colors" />
-              </div>
-            </div>
-          </button>
+            <p className="text-[10px] text-white/60 mt-1">
+              {currentAccountType === 'personal' ? '👤 Личный' : '💼 Бизнес'}
+            </p>
+          </CardContent>
+        </Card>
 
-          {/* Расходы */}
-          <button 
-            className="p-3 hover:bg-rose-50/50 transition-colors text-left group"
-            onClick={() => onNavigate?.('transactions', 'expense')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-zinc-500">Расходы</p>
-                <div className="text-base font-bold text-rose-600">
-                  -{formatCurrency(currentMonthStats.totalExpense)}
-                </div>
-                <p className="text-[10px] text-zinc-400">
-                  {filteredTransactions.filter(t => t.type === 'expense').length} операций
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="p-1.5 bg-rose-50 rounded-full">
-                  <TrendingDown className="h-3.5 w-3.5 text-rose-600" />
-                </div>
-                <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-rose-500 transition-colors" />
-              </div>
+        {/* 2. Доходы */}
+        <Card 
+          className="border-zinc-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-200 transition-all"
+          onClick={() => onNavigate?.('transactions', 'income')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-zinc-500">Доходы</p>
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
             </div>
-          </button>
-        </div>
-      </Card>
+            <div className="text-xl font-bold text-emerald-600">
+              +{formatCurrency(currentMonthStats.totalIncome)}
+            </div>
+            <p className="text-[10px] text-zinc-400 mt-1">
+              {filteredTransactions.filter(t => t.type === 'income').length} операций
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 3. Расходы */}
+        <Card 
+          className="border-zinc-200 shadow-sm cursor-pointer hover:shadow-md hover:border-rose-200 transition-all"
+          onClick={() => onNavigate?.('transactions', 'expense')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-zinc-500">Расходы</p>
+              <TrendingDown className="h-4 w-4 text-rose-500" />
+            </div>
+            <div className="text-xl font-bold text-rose-600">
+              -{formatCurrency(currentMonthStats.totalExpense)}
+            </div>
+            <p className="text-[10px] text-zinc-400 mt-1">
+              {filteredTransactions.filter(t => t.type === 'expense').length} операций
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 4. Топ категория */}
+        <Card 
+          className="border-zinc-200 shadow-sm cursor-pointer hover:shadow-md transition-all"
+          onClick={() => onNavigate?.('categories')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-zinc-500">Топ расход</p>
+              <PieChart className="h-4 w-4 text-zinc-400" />
+            </div>
+            {topExpenseCategories.length > 0 ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{categories.find(c => c.id === topExpenseCategories[0].categoryId)?.icon || '📊'}</span>
+                  <span className="text-sm font-medium text-zinc-800 truncate">
+                    {categories.find(c => c.id === topExpenseCategories[0].categoryId)?.name || 'Категория'}
+                  </span>
+                </div>
+                <p className="text-base font-bold text-zinc-900 mt-1">
+                  {formatCurrency(topExpenseCategories[0].total)}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-zinc-400">Нет данных</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Топ категорий расходов */}
       <Card className="border-zinc-200/50 shadow-sm bg-white/80 backdrop-blur">
