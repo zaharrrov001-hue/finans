@@ -11,6 +11,7 @@ import {
   Menu,
   Plus,
   Wallet,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,7 @@ interface NavigationProps {
 const navItems = [
   { id: 'dashboard', label: 'Обзор', icon: LayoutDashboard },
   { id: 'transactions', label: 'Операции', icon: Receipt },
+  { id: 'calendar', label: 'Календарь', icon: CalendarDays },
   { id: 'categories', label: 'Категории', icon: Tag },
 ];
 

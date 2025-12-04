@@ -40,7 +40,6 @@ import {
   FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Tesseract from 'tesseract.js';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/lib/settings-store';
 import { findCategoryByKeywords } from '@/lib/ai-categorizer';
@@ -689,67 +688,49 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
         setAttachments((prev) => [...prev, fileUrl]);
         toast.success(`📎 Файл "${file.name}" добавлен`);
 
-        // OCR только для изображений
+        // Анализ изображений через GPT Vision
         if (isImage) {
           setIsProcessingOCR(true);
+          toast.info('🔍 Анализирую изображение...');
+          
           try {
-            const result = await Tesseract.recognize(fileUrl, 'rus+eng', {
-              logger: () => {} // Отключаем логи
+            const response = await fetch('/api/analyze-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                image: fileUrl,
+                categories: categories,
+              }),
             });
-            const text = result.data.text;
-            console.log('OCR Text:', text);
             
-            const foundItems: string[] = [];
-            
-            // 1. Ищем итоговую сумму
-            const totalMatch = text.match(/(?:итого|всего|total|сумма|к оплате)[:\s]*[₽$]?\s*(\d[\d\s.,]*\d|\d+)/i);
-            if (totalMatch) {
-              const amount = totalMatch[1].replace(/\s/g, '').replace(',', '.');
-              foundItems.push(`чек ${amount}`);
+            if (!response.ok) {
+              throw new Error('Ошибка API');
             }
             
-            // 2. Ищем пары "название - цена" или "название цена"
-            const lines = text.split('\n').filter(line => line.trim());
-            for (const line of lines) {
-              // Паттерн: текст ... число (цена в конце строки)
-              const lineMatch = line.match(/([а-яёa-z][а-яёa-z\s]{2,30})\s+(\d{2,7})[.,]?\d{0,2}\s*[₽р]?$/i);
-              if (lineMatch) {
-                const name = lineMatch[1].trim().toLowerCase();
-                const price = lineMatch[2];
-                // Фильтруем служебные слова
-                if (!/(итого|всего|сумма|дата|время|чек|кассир|продавец|адрес|телефон|скидка|нал|безнал)/i.test(name)) {
-                  foundItems.push(`${name} ${price}`);
-                }
-              }
-            }
+            const data = await response.json();
             
-            // 3. Ищем цены в формате "123.45 ₽" или "123,45р"
-            if (foundItems.length === 0) {
-              const priceMatches = text.match(/(\d{2,7})[.,]\d{2}\s*[₽рР]/g);
-              if (priceMatches && priceMatches.length > 0) {
-                // Берём последнюю (обычно итого)
-                const lastPrice = priceMatches[priceMatches.length - 1].replace(/[₽рР\s]/g, '').replace(',', '.');
-                foundItems.push(`покупка ${lastPrice}`);
-              }
-            }
-            
-            if (foundItems.length > 0) {
-              const newInput = foundItems.join(', ');
-              setInput(prev => prev ? `${prev}, ${newInput}` : newInput);
-              toast.success(`✓ Распознано: ${foundItems.length} ${foundItems.length === 1 ? 'позиция' : 'позиций'}`);
+            if (data.items && data.items.length > 0) {
+              // Формируем строку из распознанных товаров
+              const itemsStr = data.items
+                .map((item: { name: string; amount: number }) => `${item.name} ${item.amount}`)
+                .join(', ');
+              
+              setInput(prev => prev ? `${prev}, ${itemsStr}` : itemsStr);
+              toast.success(`✓ Распознано: ${data.items.length} ${data.items.length === 1 ? 'товар' : 'товаров'}`);
+            } else if (data.total) {
+              setInput(prev => prev ? `${prev}, покупка ${data.total}` : `покупка ${data.total}`);
+              toast.success(`✓ Найдена сумма: ${data.total} ₽`);
             } else {
-              // Показываем что удалось прочитать
-              const shortText = text.substring(0, 100).replace(/\n/g, ' ');
-              toast.info(`Текст: "${shortText}..." - суммы не найдены`);
+              toast.info('Не удалось распознать товары на изображении');
             }
           } catch (error) {
-            console.error('OCR Error:', error);
-            toast.error('Ошибка распознавания');
+            console.error('Image Analysis Error:', error);
+            toast.error('Ошибка распознавания. Проверьте настройки API.');
           } finally {
             setIsProcessingOCR(false);
           }
         } else if (isPDF) {
-          toast.info('PDF добавлен (OCR недоступен)');
+          toast.info('PDF добавлен');
         }
       };
       reader.readAsDataURL(file);

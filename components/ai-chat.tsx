@@ -247,11 +247,6 @@ export function AIChat({ open, onOpenChange }: AIChatProps) {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    if (!openaiApiKey) {
-      toast.error('Добавьте OpenAI API ключ в настройках');
-      return;
-    }
-
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -265,73 +260,80 @@ export function AIChat({ open, onOpenChange }: AIChatProps) {
 
     try {
       const context = getFinancialContext();
+      let assistantContent: string;
       
-      const systemPrompt = `Ты умный финансовый ассистент. Понимаешь разговорную речь, сленг и неточные формулировки. Отвечай на русском, дружелюбно и по делу.
+      // Сначала пробуем серверный API (Vercel)
+      try {
+        const serverResponse = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [...messages.slice(-10).map(m => ({ role: m.role, content: m.content })), { role: 'user', content: userMessage.content }],
+            transactions: transactions.slice(0, 50).map(t => ({
+              description: t.description,
+              amount: t.amount,
+              type: t.type,
+              date: format(new Date(t.date), 'dd.MM.yyyy'),
+              categoryId: t.categoryId,
+            })),
+            categories: categories.map(c => ({
+              id: c.id,
+              name: c.name,
+              icon: c.icon,
+              type: c.type,
+            })),
+          }),
+        });
+        
+        if (serverResponse.ok) {
+          const data = await serverResponse.json();
+          assistantContent = data.content;
+        } else {
+          throw new Error('Server API failed');
+        }
+      } catch {
+        // Fallback на клиентский API ключ
+        if (!openaiApiKey) {
+          throw new Error('API ключ не настроен');
+        }
+        
+        const systemPrompt = `Ты финансовый ассистент. Отвечай на русском, кратко и по делу.
 
-ДАННЫЕ ПОЛЬЗОВАТЕЛЯ (${context.accountType} счёт, ${context.currentMonth}):
-
-📊 ФИНАНСЫ:
+ФИНАНСЫ (${context.currentMonth}):
 • Баланс: ${context.balance.toLocaleString()} ₽
-• Доходы: +${context.thisMonthIncome.toLocaleString()} ₽
+• Доходы: +${context.thisMonthIncome.toLocaleString()} ₽  
 • Расходы: -${context.thisMonthExpenses.toLocaleString()} ₽
-• Прошлый месяц (${context.lastMonth}): -${context.lastMonthExpenses.toLocaleString()} ₽
-• Операций: ${context.totalTransactions}, без категории: ${context.uncategorizedCount}
 
-📈 ТОП РАСХОДОВ ПО КАТЕГОРИЯМ:
-${context.topExpenses.length > 0 ? context.topExpenses.map((e, i) => `${i + 1}. ${e.name}: ${e.amount.toLocaleString()} ₽ (${e.count} оп.)`).join('\n') : 'Пока нет данных'}
+ТОП РАСХОДОВ:
+${context.topExpenses.slice(0, 5).map((e, i) => `${i + 1}. ${e.name}: ${e.amount.toLocaleString()} ₽`).join('\n')}
 
-📝 ПОСЛЕДНИЕ ОПЕРАЦИИ:
-${context.recentTransactions.length > 0 ? context.recentTransactions.map(t => `• ${t.description}: ${t.type === 'expense' ? '-' : '+'}${t.amount}₽ [${t.category}] ${t.date}`).join('\n') : 'Пока нет операций'}
+Для добавления категории: [ADD_CATEGORY: название, expense/income, эмодзи]`;
 
-🏷️ КАТЕГОРИИ: ${context.categories.map(c => `${c.icon || '📁'} ${c.name}`).join(', ')}
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openaiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+              { role: 'user', content: userMessage.content },
+            ],
+            temperature: 0.7,
+            max_tokens: 1000,
+          }),
+        });
 
-ИНСТРУКЦИИ:
-1. Понимай разные формулировки одного вопроса:
-   - "траты/расходы/потратил/ушло" = расходы
-   - "заработал/получил/пришло/доход" = доходы  
-   - "баланс/остаток/сколько осталось/на счету" = баланс
-   - "топ/больше всего/куда уходит" = топ расходов
-   - "еда/продукты/магазин" → категория Продукты
-   - "кафе/ресторан/кофе/обед" → категория Кафе и рестораны
-   - "такси/бензин/метро/транспорт" → категория Транспорт
-   - "развлечения/кино/игры" → категория Развлечения
+        if (!response.ok) {
+          throw new Error('Ошибка API');
+        }
 
-2. Анализируй данные умно:
-   - Сравнивай с прошлым месяцем
-   - Находи аномалии в тратах
-   - Давай персональные советы
-
-3. Для добавления категории используй формат:
-   [ADD_CATEGORY: название, тип (expense/income), эмодзи]
-
-4. Форматируй красиво: числа с пробелами (1 000 ₽), используй эмодзи.
-
-5. Будь кратким но информативным. Не повторяй вопрос пользователя.`;
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openaiApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
-            { role: 'user', content: userMessage.content },
-          ],
-          temperature: 0.7,
-          max_tokens: 1000,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Ошибка API');
+        const data = await response.json();
+        assistantContent = data.choices[0]?.message?.content || 'Не удалось получить ответ';
       }
-
-      const data = await response.json();
-      let assistantContent = data.choices[0]?.message?.content || 'Не удалось получить ответ';
 
       // Проверяем команду добавления категории
       const addCategoryMatch = assistantContent.match(/\[ADD_CATEGORY:\s*([^,]+),\s*(expense|income),\s*([^\]]+)\]/);

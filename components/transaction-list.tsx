@@ -25,16 +25,21 @@ import { Transaction } from '@/lib/types';
 
 interface TransactionListProps {
   onEdit?: (transaction: Transaction) => void;
+  typeFilter?: string; // 'income' | 'expense' | undefined
 }
 
-export function TransactionList({ onEdit }: TransactionListProps) {
+export function TransactionList({ onEdit, typeFilter }: TransactionListProps) {
   const { transactions, categories, deleteTransaction, currentAccountType } = useFinanceStore();
   const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
 
-  // Фильтруем по текущему типу аккаунта
+  // Фильтруем по текущему типу аккаунта и типу транзакции
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => t.accountType === currentAccountType);
-  }, [transactions, currentAccountType]);
+    let result = transactions.filter(t => t.accountType === currentAccountType);
+    if (typeFilter) {
+      result = result.filter(t => t.type === typeFilter);
+    }
+    return result;
+  }, [transactions, currentAccountType, typeFilter]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ru-RU', {

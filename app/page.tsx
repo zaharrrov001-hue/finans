@@ -6,6 +6,7 @@ import { Navigation } from '@/components/navigation';
 import { Dashboard } from '@/components/dashboard';
 import { TransactionList } from '@/components/transaction-list';
 import { CategoryManager } from '@/components/category-manager';
+import { CalendarView } from '@/components/calendar-view';
 import { AddTransactionDialog } from '@/components/add-transaction-dialog';
 import { AIChat } from '@/components/ai-chat';
 import { AuthForm } from '@/components/auth-form';
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button';
 export default function Home() {
   const { isAuthenticated, isLoading } = useAuthStore();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [transactionFilter, setTransactionFilter] = useState<string | undefined>();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
@@ -36,6 +38,18 @@ export default function Home() {
     if (!open) {
       setEditTransaction(null);
     }
+  };
+
+  // Навигация с фильтром
+  const handleNavigate = (tab: string, filter?: string) => {
+    setActiveTab(tab);
+    setTransactionFilter(filter);
+  };
+  
+  // Сброс фильтра при смене таба
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setTransactionFilter(undefined);
   };
 
   // Loading state
@@ -61,7 +75,7 @@ export default function Home() {
         {/* Desktop Sidebar */}
         <Navigation
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
           onAddClick={() => setIsAddDialogOpen(true)}
         />
 
@@ -73,8 +87,8 @@ export default function Home() {
           <div className="p-4 md:p-8 pb-24 md:pb-8">
             <div className="max-w-4xl mx-auto">
               {activeTab === 'dashboard' && (
-                <div className="space-y-6 animate-slide-in-up">
-                  <Dashboard />
+                <div className="space-y-4 animate-slide-in-up">
+                  <Dashboard onNavigate={handleNavigate} />
                   <TransactionList onEdit={handleEdit} />
                 </div>
               )}
@@ -82,25 +96,41 @@ export default function Home() {
               {activeTab === 'transactions' && (
                 <div className="space-y-4 animate-slide-in-up">
                   <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-                      Все операции
+                    <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
+                      {transactionFilter === 'income' ? 'Доходы' : 
+                       transactionFilter === 'expense' ? 'Расходы' : 'Все операции'}
                     </h1>
+                    {transactionFilter && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setTransactionFilter(undefined)}
+                      >
+                        Показать все
+                      </Button>
+                    )}
                   </div>
-                  <TransactionList onEdit={handleEdit} />
+                  <TransactionList onEdit={handleEdit} typeFilter={transactionFilter} />
+                </div>
+              )}
+
+              {activeTab === 'calendar' && (
+                <div className="animate-slide-in-up">
+                  <CalendarView />
                 </div>
               )}
 
               {activeTab === 'categories' && (
                 <div className="space-y-4 animate-slide-in-up">
-                  <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+                  <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
                     Категории
-          </h1>
+                  </h1>
                   <CategoryManager />
                 </div>
               )}
-        </div>
-        </div>
-      </main>
+            </div>
+          </div>
+        </main>
       </div>
 
       {/* Add/Edit Transaction Dialog */}

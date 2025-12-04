@@ -5,12 +5,16 @@ import { useFinanceStore } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, Wallet, PieChart, Briefcase, User } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, PieChart, Briefcase, User, ChevronRight } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { AccountType } from '@/lib/types';
 
-export function Dashboard() {
+interface DashboardProps {
+  onNavigate?: (tab: string, filter?: string) => void;
+}
+
+export function Dashboard({ onNavigate }: DashboardProps) {
   const { transactions, categories, getStats, currentAccountType, setAccountType } = useFinanceStore();
   
   const currentMonthStats = useMemo(() => {
@@ -44,14 +48,14 @@ export function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Заголовок с переключателем */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="space-y-0.5">
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
             Обзор финансов
           </h1>
-          <p className="text-sm text-zinc-500">
+          <p className="text-xs text-zinc-500">
             {format(new Date(), 'LLLL yyyy', { locale: ru })}
           </p>
         </div>
@@ -62,77 +66,93 @@ export function Dashboard() {
           onValueChange={(v) => setAccountType(v as AccountType)}
           className="w-full sm:w-auto"
         >
-          <TabsList className="grid w-full sm:w-auto grid-cols-2 h-10">
-            <TabsTrigger value="personal" className="gap-2 px-4">
-              <User className="h-4 w-4" />
+          <TabsList className="grid w-full sm:w-auto grid-cols-2 h-9">
+            <TabsTrigger value="personal" className="gap-1.5 px-3 text-xs">
+              <User className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Личное</span>
             </TabsTrigger>
-            <TabsTrigger value="business" className="gap-2 px-4">
-              <Briefcase className="h-4 w-4" />
+            <TabsTrigger value="business" className="gap-1.5 px-3 text-xs">
+              <Briefcase className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Бизнес</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
-      {/* Основные карточки - компактный дизайн */}
-      <div className="grid gap-3 grid-cols-2">
-        {/* Баланс - слева, занимает всю высоту */}
-        <Card className="bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-600 text-white border-0 shadow-xl shadow-blue-500/25 row-span-2">
-          <CardHeader className="flex flex-row items-center justify-between pb-1 pt-4 px-4">
-            <CardTitle className="text-xs font-medium text-white/80">
-              Баланс
-            </CardTitle>
-            <div className="p-1 bg-white/20 rounded-md">
-              <Wallet className="h-3.5 w-3.5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 flex flex-col justify-center h-[calc(100%-3rem)]">
-            <div className="text-2xl md:text-3xl font-bold tracking-tight">
-              {formatCurrency(currentMonthStats.balance)}
-            </div>
-            <p className="text-[10px] text-white/70 mt-1">
-              {currentAccountType === 'personal' ? '👤 Личный' : '💼 Бизнес'}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Доходы - справа сверху */}
-        <Card className="border-zinc-200/50 shadow-sm bg-white/80 backdrop-blur">
-          <CardContent className="p-3 flex items-center justify-between">
+      {/* Единая карточка дашборда */}
+      <Card className="border-0 shadow-lg overflow-hidden">
+        {/* Баланс - градиентный хедер */}
+        <div 
+          className="bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 p-4 cursor-pointer hover:opacity-95 transition-opacity"
+          onClick={() => onNavigate?.('transactions')}
+        >
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-zinc-500 mb-0.5">Доходы</p>
-              <div className="text-lg font-bold text-emerald-600">
-                +{formatCurrency(currentMonthStats.totalIncome)}
+              <p className="text-xs text-white/70 mb-1">Баланс</p>
+              <div className="text-2xl font-bold text-white">
+                {formatCurrency(currentMonthStats.balance)}
               </div>
-              <p className="text-[10px] text-zinc-400">
-                {filteredTransactions.filter(t => t.type === 'income').length} оп.
+              <p className="text-[10px] text-white/60 mt-0.5">
+                {currentAccountType === 'personal' ? '👤 Личный счёт' : '💼 Бизнес счёт'}
               </p>
             </div>
-            <div className="p-2 bg-emerald-50 rounded-full">
-              <TrendingUp className="h-4 w-4 text-emerald-600" />
+            <div className="p-2 bg-white/20 rounded-xl">
+              <Wallet className="h-5 w-5 text-white" />
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Расходы - справа снизу */}
-        <Card className="border-zinc-200/50 shadow-sm bg-white/80 backdrop-blur">
-          <CardContent className="p-3 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-zinc-500 mb-0.5">Расходы</p>
-              <div className="text-lg font-bold text-rose-600">
-                -{formatCurrency(currentMonthStats.totalExpense)}
+          </div>
+        </div>
+        
+        {/* Доходы и Расходы */}
+        <div className="grid grid-cols-2 divide-x divide-zinc-100">
+          {/* Доходы */}
+          <button 
+            className="p-3 hover:bg-emerald-50/50 transition-colors text-left group"
+            onClick={() => onNavigate?.('transactions', 'income')}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] text-zinc-500">Доходы</p>
+                <div className="text-base font-bold text-emerald-600">
+                  +{formatCurrency(currentMonthStats.totalIncome)}
+                </div>
+                <p className="text-[10px] text-zinc-400">
+                  {filteredTransactions.filter(t => t.type === 'income').length} операций
+                </p>
               </div>
-              <p className="text-[10px] text-zinc-400">
-                {filteredTransactions.filter(t => t.type === 'expense').length} оп.
-              </p>
+              <div className="flex items-center gap-1">
+                <div className="p-1.5 bg-emerald-50 rounded-full">
+                  <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-emerald-500 transition-colors" />
+              </div>
             </div>
-            <div className="p-2 bg-rose-50 rounded-full">
-              <TrendingDown className="h-4 w-4 text-rose-600" />
+          </button>
+
+          {/* Расходы */}
+          <button 
+            className="p-3 hover:bg-rose-50/50 transition-colors text-left group"
+            onClick={() => onNavigate?.('transactions', 'expense')}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] text-zinc-500">Расходы</p>
+                <div className="text-base font-bold text-rose-600">
+                  -{formatCurrency(currentMonthStats.totalExpense)}
+                </div>
+                <p className="text-[10px] text-zinc-400">
+                  {filteredTransactions.filter(t => t.type === 'expense').length} операций
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="p-1.5 bg-rose-50 rounded-full">
+                  <TrendingDown className="h-3.5 w-3.5 text-rose-600" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-rose-500 transition-colors" />
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </button>
+        </div>
+      </Card>
 
       {/* Топ категорий расходов */}
       <Card className="border-zinc-200/50 shadow-sm bg-white/80 backdrop-blur">
