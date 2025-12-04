@@ -35,35 +35,83 @@ async function analyzeWithGoogleVision(imageBase64: string) {
   }
 }
 
-// Парсинг текста чека
+// Парсинг текста (чеки + банковские приложения)
 function parseReceiptText(text: string): { items: { name: string; amount: number }[]; total: number | null } {
   const items: { name: string; amount: number }[] = [];
   let total: number | null = null;
   
+  console.log('OCR Text:', text.substring(0, 500));
+  
   const lines = text.split('\n').filter(line => line.trim());
   
-  for (const line of lines) {
-    // Ищем итого
-    const totalMatch = line.match(/(?:итого|всего|total|к оплате|сумма)[:\s]*[₽$]?\s*(\d[\d\s.,]*)/i);
-    if (totalMatch) {
-      total = parseFloat(totalMatch[1].replace(/\s/g, '').replace(',', '.'));
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Пропускаем служебные строки
+    if (/^(дата|время|чек|кассир|терминал|адрес|телефон|спасибо|благодар|итого|баланс|доступно|счёт|карта \*|операци)/i.test(line.trim())) {
       continue;
     }
     
-    // Ищем товар + цена (цена в конце строки)
-    const itemMatch = line.match(/^(.{3,40}?)\s+(\d{1,3}(?:[\s.,]\d{3})*(?:[.,]\d{2})?)\s*[₽рР]?\s*$/);
-    if (itemMatch) {
-      const name = itemMatch[1].trim();
-      const amount = parseFloat(itemMatch[2].replace(/\s/g, '').replace(',', '.'));
+    // 1. Банковский формат: "Покупка МАГАЗИН" + "-500 ₽" или "- 500,00 ₽"
+    const bankMatch = line.match(/[-−–]\s*(\d[\d\s]*[.,]?\d*)\s*[₽₴$€рР]/);
+    if (bankMatch) {
+      const amount = parseFloat(bankMatch[1].replace(/\s/g, '').replace(',', '.'));
+      if (amount > 0) {
+        // Ищем название в текущей или предыдущей строке
+        let name = line.replace(/[-−–]\s*\d[\d\s.,]*\s*[₽₴$€рР]?/g, '').trim();
+        if (name.length < 3 && i > 0) {
+          name = lines[i-1].trim();
+        }
+        // Убираем "Покупка", "Перевод" и т.д.
+        name = name.replace(/^(покупка|перевод|оплата|списание|пополнение)\s*/i, '').trim();
+        if (name.length >= 2 && name.length <= 50) {
+          items.push({ name: name.substring(0, 30), amount });
+        }
+      }
+      continue;
+    }
+    
+    // 2. Формат чека: "Товар 500" или "Товар 500.00 ₽"
+    const receiptMatch = line.match(/^(.{2,40}?)\s+(\d{1,3}(?:[\s.,]\d{3})*(?:[.,]\d{2})?)\s*[₽рР]?\s*$/);
+    if (receiptMatch) {
+      const name = receiptMatch[1].trim();
+      const amount = parseFloat(receiptMatch[2].replace(/\s/g, '').replace(',', '.'));
       
-      // Фильтруем служебные строки
-      if (!/итого|всего|сумма|дата|время|чек|кассир|скидка|нал|карт|сдача/i.test(name) && amount > 0) {
+      if (!/итого|всего|сумма|скидка|нал|карт|сдача|ндс|ндс/i.test(name) && amount > 0) {
         items.push({ name: name.substring(0, 30), amount });
       }
+      continue;
+    }
+    
+    // 3. Просто число с валютой (сумма)
+    const simpleAmount = line.match(/(\d[\d\s]*[.,]\d{2})\s*[₽₴$€рР]/);
+    if (simpleAmount && !items.find(it => it.amount === parseFloat(simpleAmount[1].replace(/\s/g, '').replace(',', '.')))) {
+      const amount = parseFloat(simpleAmount[1].replace(/\s/g, '').replace(',', '.'));
+      if (amount > 10 && amount < 1000000) {
+        // Ищем название выше
+        for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+          const prevLine = lines[j].trim();
+          if (prevLine.length >= 3 && prevLine.length <= 40 && !/\d{2}[.,]\d{2}/.test(prevLine)) {
+            items.push({ name: prevLine.substring(0, 30), amount });
+            break;
+          }
+        }
+      }
+    }
+    
+    // 4. Ищем итого
+    const totalMatch = line.match(/(?:итого|всего|total|к оплате)[:\s]*[₽$]?\s*(\d[\d\s.,]*)/i);
+    if (totalMatch) {
+      total = parseFloat(totalMatch[1].replace(/\s/g, '').replace(',', '.'));
     }
   }
   
-  return { items, total };
+  // Убираем дубликаты
+  const unique = items.filter((item, index, self) => 
+    index === self.findIndex(t => t.name === item.name && t.amount === item.amount)
+  );
+  
+  return { items: unique, total };
 }
 
 // Анализ через OpenAI GPT-4 Vision
@@ -83,14 +131,23 @@ async function analyzeWithOpenAI(image: string, categoriesList: string) {
         messages: [
           {
             role: 'system',
-            content: `Извлеки товары и цены из чека. Ответ ТОЛЬКО JSON:
-{"items":[{"name":"товар","amount":123}],"total":456}
-Категории: ${categoriesList}`
+            content: `Ты анализируешь скриншоты банковских приложений и чеки.
+Извлеки ВСЕ траты/покупки с суммами.
+
+ВАЖНО: Ответ ТОЛЬКО JSON без пояснений:
+{"items":[{"name":"название","amount":123}],"total":null}
+
+Правила:
+- name: краткое название (магазин, услуга, перевод кому)
+- amount: сумма БЕЗ минуса, только число
+- Игнорируй: баланс, доступно, кэшбэк, бонусы
+- Если это чек - извлеки товары
+- Если банк - извлеки операции расхода`
           },
           {
             role: 'user',
             content: [
-              { type: 'text', text: 'Извлеки товары и цены:' },
+              { type: 'text', text: 'Найди все траты/покупки и их суммы:' },
               { type: 'image_url', image_url: { url: image, detail: 'high' } }
             ]
           }
