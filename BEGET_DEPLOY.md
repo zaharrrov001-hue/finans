@@ -141,3 +141,5 @@ pm2 restart finance-app
 - `https://ваш-домен.ru` - должен открываться сайт
 - Логи: `pm2 logs finance-app`
 - Статус: `pm2 status`
+
+

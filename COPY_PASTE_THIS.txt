@@ -1,0 +1,10 @@
+==========================================
+СКОПИРУЙТЕ ЭТУ КОМАНДУ И ВСТАВЬТЕ В ТЕРМИНАЛ BEGET
+==========================================
+
+cd /root && git clone https://github.com/zaharrrov001-hue/finans.git finance-app && cd finance-app && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs && npm install && npm run build && npm install -g pm2 && pm2 start ecosystem.config.js && pm2 save && echo "✅ ГОТОВО!" && pm2 status
+
+==========================================
+ВСЁ! Просто скопируйте команду выше и вставьте в терминал.
+==========================================
+

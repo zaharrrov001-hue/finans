@@ -1,0 +1,92 @@
+#!/usr/bin/expect -f
+
+# Автоматический деплой finance-app на Beget
+# Использование: expect auto-deploy.expect
+
+set timeout 300
+set server "45.80.69.195"
+set user "root"
+set password "2&UPny4fHa#P"
+set app_dir "/root/finance-app"
+
+puts "🚀 Начинаю автоматический деплой на Beget..."
+
+# Подключаемся к серверу
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$server
+
+expect {
+    "password:" {
+        send "$password\r"
+        exp_continue
+    }
+    "# " {
+        puts "✅ Подключение установлено"
+    }
+    "$ " {
+        puts "✅ Подключение установлено"
+    }
+    timeout {
+        puts "❌ Таймаут подключения"
+        exit 1
+    }
+}
+
+# Команды для выполнения
+set commands {
+    "echo 'Начинаем деплой...'"
+    "cd /root"
+    "rm -rf finance-app"
+    "git clone https://github.com/zaharrrov001-hue/finans.git finance-app"
+    "cd finance-app"
+    "command -v node >/dev/null 2>&1 || (curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs)"
+    "npm install"
+    "npm run build"
+    "command -v pm2 >/dev/null 2>&1 || npm install -g pm2"
+    "mkdir -p logs"
+    "pm2 delete finance-app 2>/dev/null || true"
+    "pm2 start ecosystem.config.js"
+    "pm2 save"
+    "pm2 startup systemd -u root --hp /root || true"
+    "pm2 status"
+    "echo 'Деплой завершён!'"
+}
+
+foreach cmd $commands {
+    expect {
+        "# " {}
+        "$ " {}
+        timeout {
+            puts "⚠️  Таймаут ожидания промпта"
+        }
+    }
+    
+    send "$cmd\r"
+    
+    expect {
+        -re "password:" {
+            send "$password\r"
+            exp_continue
+        }
+        -re "# " {}
+        -re "$ " {}
+        timeout {
+            puts "⚠️  Команда выполняется долго: $cmd"
+        }
+    }
+    
+    # Небольшая задержка между командами
+    sleep 1
+}
+
+expect {
+    "# " {}
+    "$ " {}
+    timeout {}
+}
+
+send "exit\r"
+expect eof
+
+puts "\n✅ Деплой завершён!"
+puts "🌐 Приложение доступно на: http://$server:3000"
+

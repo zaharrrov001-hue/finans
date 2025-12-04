@@ -10,7 +10,7 @@ import { AddTransactionDialog } from '@/components/add-transaction-dialog';
 import { AIChat } from '@/components/ai-chat';
 import { AuthForm } from '@/components/auth-form';
 import { Transaction } from '@/lib/types';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function Home() {
@@ -116,12 +116,20 @@ export default function Home() {
         onOpenChange={setIsAIChatOpen}
       />
 
-      {/* AI Chat FAB Button */}
+      {/* Add Transaction FAB Button - основная кнопка */}
+      <Button
+        onClick={() => setIsAddDialogOpen(true)}
+        className="fixed bottom-24 md:bottom-8 right-4 md:right-8 h-14 w-14 rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/30 z-40 transition-all hover:scale-105"
+      >
+        <Plus className="h-7 w-7" />
+      </Button>
+      
+      {/* AI Chat Button - слева от + */}
       <Button
         onClick={() => setIsAIChatOpen(true)}
-        className="fixed bottom-24 md:bottom-8 right-4 md:right-8 h-14 w-14 rounded-full bg-zinc-700 hover:bg-zinc-600 shadow-lg shadow-zinc-900/30 z-40 transition-all hover:scale-105"
+        className="fixed bottom-24 md:bottom-8 right-20 md:right-24 h-12 w-12 rounded-full bg-zinc-700 hover:bg-zinc-600 shadow-lg shadow-zinc-900/30 z-40 transition-all hover:scale-105"
       >
-        <Sparkles className="h-6 w-6" />
+        <Sparkles className="h-5 w-5" />
       </Button>
     </div>
   );

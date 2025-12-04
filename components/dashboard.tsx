@@ -75,65 +75,61 @@ export function Dashboard() {
         </Tabs>
       </div>
 
-      {/* Основные карточки */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Баланс - красивый градиент */}
-        <Card className="bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-600 text-white border-0 shadow-xl shadow-blue-500/25">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-white/80">
+      {/* Основные карточки - компактный дизайн */}
+      <div className="grid gap-3 grid-cols-2">
+        {/* Баланс - слева, занимает всю высоту */}
+        <Card className="bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-600 text-white border-0 shadow-xl shadow-blue-500/25 row-span-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-1 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-white/80">
               Баланс
             </CardTitle>
-            <div className="p-1.5 bg-white/20 rounded-lg">
-              <Wallet className="h-4 w-4 text-white" />
+            <div className="p-1 bg-white/20 rounded-md">
+              <Wallet className="h-3.5 w-3.5 text-white" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold tracking-tight">
+          <CardContent className="px-4 pb-4 flex flex-col justify-center h-[calc(100%-3rem)]">
+            <div className="text-2xl md:text-3xl font-bold tracking-tight">
               {formatCurrency(currentMonthStats.balance)}
             </div>
-            <p className="text-xs text-white/70 mt-1">
-              {currentAccountType === 'personal' ? '👤 Личный счёт' : '💼 Бизнес счёт'}
+            <p className="text-[10px] text-white/70 mt-1">
+              {currentAccountType === 'personal' ? '👤 Личный' : '💼 Бизнес'}
             </p>
           </CardContent>
         </Card>
 
-        {/* Доходы */}
+        {/* Доходы - справа сверху */}
         <Card className="border-zinc-200/50 shadow-sm bg-white/80 backdrop-blur">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-600">
-              Доходы
-            </CardTitle>
+          <CardContent className="p-3 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-zinc-500 mb-0.5">Доходы</p>
+              <div className="text-lg font-bold text-emerald-600">
+                +{formatCurrency(currentMonthStats.totalIncome)}
+              </div>
+              <p className="text-[10px] text-zinc-400">
+                {filteredTransactions.filter(t => t.type === 'income').length} оп.
+              </p>
+            </div>
             <div className="p-2 bg-emerald-50 rounded-full">
               <TrendingUp className="h-4 w-4 text-emerald-600" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">
-              +{formatCurrency(currentMonthStats.totalIncome)}
-            </div>
-            <p className="text-xs text-zinc-500 mt-1">
-              {filteredTransactions.filter(t => t.type === 'income').length} операций
-            </p>
           </CardContent>
         </Card>
 
-        {/* Расходы */}
+        {/* Расходы - справа снизу */}
         <Card className="border-zinc-200/50 shadow-sm bg-white/80 backdrop-blur">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-600">
-              Расходы
-            </CardTitle>
+          <CardContent className="p-3 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-zinc-500 mb-0.5">Расходы</p>
+              <div className="text-lg font-bold text-rose-600">
+                -{formatCurrency(currentMonthStats.totalExpense)}
+              </div>
+              <p className="text-[10px] text-zinc-400">
+                {filteredTransactions.filter(t => t.type === 'expense').length} оп.
+              </p>
+            </div>
             <div className="p-2 bg-rose-50 rounded-full">
               <TrendingDown className="h-4 w-4 text-rose-600" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-rose-600">
-              -{formatCurrency(currentMonthStats.totalExpense)}
-            </div>
-            <p className="text-xs text-zinc-500 mt-1">
-              {filteredTransactions.filter(t => t.type === 'expense').length} операций
-            </p>
           </CardContent>
         </Card>
       </div>
@@ -189,6 +185,8 @@ export function Dashboard() {
     </div>
   );
 }
+
+
 
 
 

@@ -693,17 +693,54 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
         if (isImage) {
           setIsProcessingOCR(true);
           try {
-            const result = await Tesseract.recognize(fileUrl, 'rus');
+            const result = await Tesseract.recognize(fileUrl, 'rus+eng', {
+              logger: () => {} // Отключаем логи
+            });
             const text = result.data.text;
+            console.log('OCR Text:', text);
             
-            // Пробуем найти итоговую сумму
-            const amountMatch = text.match(/(?:итого|всего|сумма)[:\s]*(\d+[.,]?\d*)/i);
-            if (amountMatch) {
-              const amount = amountMatch[1].replace(',', '.');
-              setInput(prev => prev ? `${prev}, чек ${amount}` : `чек ${amount}`);
-              toast.success(`✓ Распознано: ${amount} ₽`);
+            const foundItems: string[] = [];
+            
+            // 1. Ищем итоговую сумму
+            const totalMatch = text.match(/(?:итого|всего|total|сумма|к оплате)[:\s]*[₽$]?\s*(\d[\d\s.,]*\d|\d+)/i);
+            if (totalMatch) {
+              const amount = totalMatch[1].replace(/\s/g, '').replace(',', '.');
+              foundItems.push(`чек ${amount}`);
+            }
+            
+            // 2. Ищем пары "название - цена" или "название цена"
+            const lines = text.split('\n').filter(line => line.trim());
+            for (const line of lines) {
+              // Паттерн: текст ... число (цена в конце строки)
+              const lineMatch = line.match(/([а-яёa-z][а-яёa-z\s]{2,30})\s+(\d{2,7})[.,]?\d{0,2}\s*[₽р]?$/i);
+              if (lineMatch) {
+                const name = lineMatch[1].trim().toLowerCase();
+                const price = lineMatch[2];
+                // Фильтруем служебные слова
+                if (!/(итого|всего|сумма|дата|время|чек|кассир|продавец|адрес|телефон|скидка|нал|безнал)/i.test(name)) {
+                  foundItems.push(`${name} ${price}`);
+                }
+              }
+            }
+            
+            // 3. Ищем цены в формате "123.45 ₽" или "123,45р"
+            if (foundItems.length === 0) {
+              const priceMatches = text.match(/(\d{2,7})[.,]\d{2}\s*[₽рР]/g);
+              if (priceMatches && priceMatches.length > 0) {
+                // Берём последнюю (обычно итого)
+                const lastPrice = priceMatches[priceMatches.length - 1].replace(/[₽рР\s]/g, '').replace(',', '.');
+                foundItems.push(`покупка ${lastPrice}`);
+              }
+            }
+            
+            if (foundItems.length > 0) {
+              const newInput = foundItems.join(', ');
+              setInput(prev => prev ? `${prev}, ${newInput}` : newInput);
+              toast.success(`✓ Распознано: ${foundItems.length} ${foundItems.length === 1 ? 'позиция' : 'позиций'}`);
             } else {
-              toast.info('Сумма не найдена на чеке');
+              // Показываем что удалось прочитать
+              const shortText = text.substring(0, 100).replace(/\n/g, ' ');
+              toast.info(`Текст: "${shortText}..." - суммы не найдены`);
             }
           } catch (error) {
             console.error('OCR Error:', error);
@@ -1093,6 +1130,8 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
     </Dialog>
   );
 }
+
+
 
 
 
