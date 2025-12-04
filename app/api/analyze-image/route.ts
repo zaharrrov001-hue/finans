@@ -1,23 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(request: NextRequest) {
+// Анализ через Google Cloud Vision
+async function analyzeWithGoogleVision(imageBase64: string) {
+  const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
+  if (!apiKey) return null;
+
   try {
-    const { image, categories } = await request.json();
+    // Убираем data:image prefix если есть
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
     
-    // Получаем API ключ из переменных окружения Vercel
-    const apiKey = process.env.OPENAI_API_KEY;
-    
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'OpenAI API ключ не настроен' },
-        { status: 500 }
-      );
+    const response = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: [{
+            image: { content: base64Data },
+            features: [{ type: 'TEXT_DETECTION', maxResults: 50 }]
+          }]
+        })
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const text = data.responses?.[0]?.fullTextAnnotation?.text || '';
+    return text;
+  } catch (error) {
+    console.error('Google Vision Error:', error);
+    return null;
+  }
+}
+
+// Парсинг текста чека
+function parseReceiptText(text: string): { items: { name: string; amount: number }[]; total: number | null } {
+  const items: { name: string; amount: number }[] = [];
+  let total: number | null = null;
+  
+  const lines = text.split('\n').filter(line => line.trim());
+  
+  for (const line of lines) {
+    // Ищем итого
+    const totalMatch = line.match(/(?:итого|всего|total|к оплате|сумма)[:\s]*[₽$]?\s*(\d[\d\s.,]*)/i);
+    if (totalMatch) {
+      total = parseFloat(totalMatch[1].replace(/\s/g, '').replace(',', '.'));
+      continue;
     }
+    
+    // Ищем товар + цена (цена в конце строки)
+    const itemMatch = line.match(/^(.{3,40}?)\s+(\d{1,3}(?:[\s.,]\d{3})*(?:[.,]\d{2})?)\s*[₽рР]?\s*$/);
+    if (itemMatch) {
+      const name = itemMatch[1].trim();
+      const amount = parseFloat(itemMatch[2].replace(/\s/g, '').replace(',', '.'));
+      
+      // Фильтруем служебные строки
+      if (!/итого|всего|сумма|дата|время|чек|кассир|скидка|нал|карт|сдача/i.test(name) && amount > 0) {
+        items.push({ name: name.substring(0, 30), amount });
+      }
+    }
+  }
+  
+  return { items, total };
+}
 
-    const categoriesList = categories?.map((c: { name: string; icon: string; type: string }) => 
-      `${c.icon} ${c.name}`
-    ).join(', ') || '';
+// Анализ через OpenAI GPT-4 Vision
+async function analyzeWithOpenAI(image: string, categoriesList: string) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
 
+  try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -29,71 +82,70 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'system',
-            content: `Ты анализируешь чеки и скриншоты покупок. Извлеки все товары/услуги и их цены.
-
-ВАЖНО: Отвечай ТОЛЬКО в формате JSON:
-{
-  "items": [
-    {"name": "название товара", "amount": 123, "category": "предложенная категория"}
-  ],
-  "total": 456
-}
-
-Доступные категории: ${categoriesList}
-
-Правила:
-- Названия товаров пиши кратко (1-3 слова)
-- Цены только числа без копеек
-- Если не можешь распознать - верни пустой массив items
-- total - итоговая сумма если есть`
+            content: `Извлеки товары и цены из чека. Ответ ТОЛЬКО JSON:
+{"items":[{"name":"товар","amount":123}],"total":456}
+Категории: ${categoriesList}`
           },
           {
             role: 'user',
             content: [
-              {
-                type: 'text',
-                text: 'Проанализируй этот чек/скриншот и извлеки все покупки с ценами:'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: image,
-                  detail: 'high'
-                }
-              }
+              { type: 'text', text: 'Извлеки товары и цены:' },
+              { type: 'image_url', image_url: { url: image, detail: 'high' } }
             ]
           }
         ],
-        max_tokens: 1000,
+        max_tokens: 500,
       }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('OpenAI Vision API Error:', error);
-      return NextResponse.json(
-        { error: 'Ошибка распознавания' },
-        { status: response.status }
-      );
-    }
+    if (!response.ok) return null;
 
     const data = await response.json();
     const content = data.choices[0]?.message?.content || '{}';
+    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(jsonStr);
+  } catch (error) {
+    console.error('OpenAI Vision Error:', error);
+    return null;
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { image, categories } = await request.json();
     
-    // Парсим JSON из ответа
-    try {
-      // Убираем markdown если есть
-      const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(jsonStr);
-      return NextResponse.json(parsed);
-    } catch {
-      console.error('Failed to parse GPT response:', content);
-      return NextResponse.json({ items: [], total: null });
+    const categoriesList = categories?.map((c: { name: string; icon: string }) => 
+      `${c.icon} ${c.name}`
+    ).join(', ') || '';
+
+    // 1. Сначала пробуем Google Cloud Vision (быстрее и дешевле)
+    const googleText = await analyzeWithGoogleVision(image);
+    if (googleText) {
+      const parsed = parseReceiptText(googleText);
+      if (parsed.items.length > 0 || parsed.total) {
+        console.log('✓ Google Vision успешно');
+        return NextResponse.json(parsed);
+      }
     }
+
+    // 2. Fallback на OpenAI GPT-4 Vision
+    const openaiResult = await analyzeWithOpenAI(image, categoriesList);
+    if (openaiResult && (openaiResult.items?.length > 0 || openaiResult.total)) {
+      console.log('✓ OpenAI Vision успешно');
+      return NextResponse.json(openaiResult);
+    }
+
+    // 3. Ничего не сработало
+    return NextResponse.json({ 
+      items: [], 
+      total: null,
+      error: 'Не удалось распознать. Добавьте API ключи в настройках Vercel.'
+    });
+
   } catch (error) {
     console.error('Analyze Image API Error:', error);
     return NextResponse.json(
-      { error: 'Ошибка сервера' },
+      { error: 'Ошибка сервера', items: [], total: null },
       { status: 500 }
     );
   }
