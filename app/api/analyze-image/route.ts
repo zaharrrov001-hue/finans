@@ -1,111 +1,124 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Функция очистки текста суммы от ошибок OCR
+function cleanAmountStr(str: string): string {
+  return str
+    .replace(/[oOО]/g, '0')
+    .replace(/[lI|]/g, '1')
+    .replace(/[zZЗз]/g, '3')
+    .replace(/[bб]/g, '6')
+    .replace(/[sS]/g, '5')
+    .replace(/\s+/g, '') // Убираем пробелы
+    .replace(/,/g, '.'); // Запятую на точку
+}
+
 // Умный парсинг текста от Google Vision для банковских приложений
 function parseReceiptText(text: string): { items: { name: string; amount: number }[]; total: number | null } {
   const items: { name: string; amount: number }[] = [];
   let total: number | null = null;
   
-  console.log('OCR Text:', text.substring(0, 1000));
+  // Чистим базовый текст для логов
+  const cleanLogText = text.replace(/\n/g, ' ').substring(0, 200);
+  console.log('Parsing text:', cleanLogText);
   
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   
-  // Паттерны для пропуска
+  // Паттерны для пропуска (мусор)
   const skipPatterns = [
     /^(операции|расходы|доходы|баланс|доступно|счёт|карта|фильтр|без перев|декабрь|ноябрь|октябрь|сентябрь|август|июль|июнь|май|апрель|март|февраль|январь)/i,
     /^(вчера|сегодня|завтра)/i,
     /^\d{1,2}\s+(декабря|ноября|октября|сентября|августа|июля|июня|мая|апреля|марта|февраля|января)/i,
     /^(пн|вт|ср|чт|пт|сб|вс)$/i,
-    /^[0-9]{1,2}:[0-9]{2}$/, // время
+    /^[0-9]{1,2}:[0-9]{2}$/, 
     /^\+?\s*фильтр/i,
+    /^(\d{1,2}.\d{1,2}.\d{2,4})$/ // Даты типа 01.01.2024
   ];
   
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    let line = lines[i];
     
-    // Пропускаем заголовки и служебные строки
-    if (skipPatterns.some(p => p.test(line))) {
-      continue;
-    }
-    
-    // Пропускаем строки только с числами (даты, суммы без названия)
-    if (/^[\d\s.,]+$/.test(line) && line.length < 20) {
-      continue;
-    }
-    
-    // 1. Банковский формат: "Название" + "Категория" + "- 230 P" или "+1000 P"
-    // Ищем сумму в конце строки: "- 123 P", "+ 456 P", "- 2 733,31 P"
-    const amountMatch = line.match(/([+-])\s*(\d[\d\s]*[.,]?\d*)\s*[₽₴$€рРP]/);
-    if (amountMatch) {
-      const sign = amountMatch[1];
-      const amountStr = amountMatch[2].replace(/\s/g, '').replace(',', '.');
-      const amount = parseFloat(amountStr);
+    // Пропускаем очевидный мусор
+    if (skipPatterns.some(p => p.test(line))) continue;
+    if (/^[\d\s.,]+$/.test(line) && line.length < 5) continue; // Короткие числа
+
+    // --- Попытка найти сумму с валютой ---
+    // Ищем паттерны вида: "- 123 P", "+ 123.00", "123 Р"
+    // Учитываем ошибки OCR: P, Р, R, p, rub, руб
+    const amountRegex = /([+\-−–]?)\s*([\d\sOoОоlI|zZЗзbбsS.,]+)\s*([₽PРpRr$€]|руб|rub)/i;
+    const match = line.match(amountRegex);
+
+    if (match) {
+      const sign = match[1]; // + или - (может быть пустым)
+      const rawAmount = match[2];
       
-      if (amount > 0 && amount < 10000000) {
-        // Убираем сумму из строки, получаем название
-        let name = line.replace(/([+-])\s*\d[\d\s.,]*\s*[₽₴$€рРP].*$/, '').trim();
-        
-        // Если название короткое, смотрим предыдущие строки
-        if (name.length < 3 && i > 0) {
-          // Проверяем предыдущую строку
-          const prevLine = lines[i - 1].trim();
-          if (prevLine.length >= 3 && prevLine.length <= 60 && !skipPatterns.some(p => p.test(prevLine))) {
-            // Если предыдущая строка не содержит сумму, это название
-            if (!/([+-])\s*\d[\d\s.,]*\s*[₽₴$€рРP]/.test(prevLine)) {
-              name = prevLine;
-            }
-          }
-        }
-        
-        // Убираем категории из названия (Переводы, Фастфуд, Пополнения и т.д.)
-        name = name.replace(/\s*(переводы|фастфуд|пополнения|финансовые услуги|еда|транспорт|развлечения|покупки|услуги)$/i, '').trim();
-        
-        // Убираем лишние слова
-        name = name.replace(/^(покупка|перевод|оплата|списание|пополнение|возврат)\s*/i, '').trim();
-        
-        // Если название валидное
-        if (name.length >= 2 && name.length <= 50) {
-          // Берем только расходы (минус) или все если указано
-          if (sign === '-' || sign === '+') {
-            items.push({ 
-              name: name.substring(0, 40), 
-              amount: sign === '-' ? amount : amount 
-            });
-          }
+      // Чистим сумму
+      let cleanAmt = cleanAmountStr(rawAmount);
+      
+      // Пытаемся восстановить дробную часть если она "прилипла" или отделилась криво
+      // Если последние 2 цифры отделены точкой - ок. Если нет, смотрим на длину.
+      // Часто OCR выдает "12345" вместо "123.45". Банковские суммы часто с копейками.
+      // Но рискованно просто делить на 100. Оставим как есть, если нет явной точки.
+      
+      const amount = parseFloat(cleanAmt);
+
+      // Фильтр неадекватных чисел
+      if (isNaN(amount) || amount <= 0 || amount > 10000000) continue;
+
+      // --- Поиск названия ---
+      // Название обычно СЛЕВА от суммы в той же строке или ВЫШЕ
+      let name = line.substring(0, match.index).trim();
+      
+      // Если в текущей строке названия почти нет, берем предыдущую
+      if (name.length < 3 && i > 0) {
+        const prevLine = lines[i - 1].trim();
+        // Проверяем, что предыдущая строка не является датой или мусором
+        if (!skipPatterns.some(p => p.test(prevLine)) && !amountRegex.test(prevLine)) {
+           name = prevLine;
         }
       }
-      continue;
-    }
-    
-    // 2. Формат чека: "Товар 500" или "Товар 500.00 ₽"
-    const receiptMatch = line.match(/^(.{2,50}?)\s+(\d{1,3}(?:[\s.,]\d{3})*(?:[.,]\d{2})?)\s*[₽рР]?\s*$/);
-    if (receiptMatch) {
-      const name = receiptMatch[1].trim();
-      const amount = parseFloat(receiptMatch[2].replace(/\s/g, '').replace(',', '.'));
-      
-      if (!/итого|всего|сумма|скидка|нал|карт|сдача|ндс/i.test(name) && amount > 0 && amount < 1000000) {
-        items.push({ name: name.substring(0, 40), amount });
+
+      // Чистка названия
+      name = name
+        .replace(/^(покупка|перевод|оплата|списание|пополнение|возврат|от|кому|куда)\s*/i, '') // Убираем тип операции
+        .replace(/\s*(переводы|фастфуд|супермаркеты|транспорт|развлечения|финансовые услуги|красота|аптеки|рестораны|другое)$/i, '') // Убираем категорию в конце (часто в банках)
+        .replace(/[>»›]/g, '') // Мусор OCR
+        .trim();
+
+      if (name.length > 2) {
+        // Определяем знак операции для записи
+        // Если есть явный плюс - это доход. Если слова "пополнение", "возврат", "входящий" - доход.
+        // По умолчанию считаем расходом, если нет плюса.
+        
+        const isIncome = sign.includes('+') || /пополн|возврат|входящ/i.test(lines[i] + (i>0?lines[i-1]:''));
+        
+        // Формируем результат. Для расходов сумма без минуса (логика приложения сама разберется или мы явно укажем?)
+        // В input диалога мы пишем просто "продукты 500". Если это доход, надо писать иначе?
+        // Сейчас диалог парсит всё как расход по умолчанию, если не переключен таб.
+        // Но мы можем добавить слово "доход" или "плюс" в название, но это костыль.
+        // Лучше просто вернуть item. 
+        
+        items.push({ 
+          name: name.substring(0, 40), 
+          amount: amount 
+        });
+        continue; // Нашли сумму в этой строке, идем дальше
       }
-      continue;
     }
     
-    // 3. Ищем итого/баланс
-    const totalMatch = line.match(/(?:итого|всего|total|к оплате|баланс)[:\s]*[₽$]?\s*(\d[\d\s.,]*)/i);
-    if (totalMatch) {
-      total = parseFloat(totalMatch[1].replace(/\s/g, '').replace(',', '.'));
+    // 3. Поиск "Итого"
+    if (/(итого|всего|total|оплате)/i.test(line)) {
+       const totalMatch = line.match(/([\d\sOoОоlI|.,]+)/);
+       if (totalMatch) {
+         const val = parseFloat(cleanAmountStr(totalMatch[1]));
+         if (!isNaN(val)) total = val;
+       }
     }
   }
   
-  // Убираем дубликаты и сортируем по сумме (большие суммы первыми)
-  const unique = items
-    .filter((item, index, self) => 
-      index === self.findIndex(t => 
-        Math.abs(t.amount - item.amount) < 0.01 && 
-        t.name.toLowerCase() === item.name.toLowerCase()
-      )
-    )
-    .sort((a, b) => b.amount - a.amount);
-  
-  return { items: unique, total };
+  // Убираем дубликаты (иногда одна операция сканируется дважды)
+  const uniqueItems = items.filter((v,i,a)=>a.findIndex(t=>(t.name===v.name && t.amount===v.amount))===i);
+
+  return { items: uniqueItems, total };
 }
 
 
