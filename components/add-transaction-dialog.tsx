@@ -103,6 +103,64 @@ function parseRussianNumber(text: string): number | null {
   return total > 0 ? total : null;
 }
 
+// Функция предобработки изображения (Super Scanner Lens)
+// Делает изображение черно-белым и повышает контраст для лучшего OCR
+const preprocessImage = async (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(URL.createObjectURL(file));
+        return;
+      }
+
+      // Устанавливаем размер канваса
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      // Рисуем исходное изображение
+      ctx.drawImage(img, 0, 0);
+      
+      // Получаем пиксели
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      // Проходим по всем пикселям
+      for (let i = 0; i < data.length; i += 4) {
+        // Получаем яркость (grayscale)
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        // Формула яркости для человеческого глаза
+        const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        
+        // Повышаем контраст (бинаризация с порогом)
+        // Если пиксель светлый -> делаем белым, если темный -> черным
+        // Порог 160 подходит для чеков (белая бумага) и темных скринов (белый текст)
+        // Но для банковских скринов (серый фон) лучше мягкий контраст
+        
+        // Используем контраст:
+        let val = gray;
+        // Усиливаем черное и белое
+        if (val > 140) val = 255; // Фон
+        else if (val < 100) val = 0; // Текст
+        
+        data[i] = val;     // R
+        data[i + 1] = val; // G
+        data[i + 2] = val; // B
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg', 0.9)); // Качество 0.9
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+};
+
 // Умный парсер для автоматического определения количества операций
 function parseInput(input: string): ParsedItem[] {
   if (!input.trim()) return [];
@@ -692,22 +750,31 @@ ${itemsWithoutCategory.map((item, i) => `${i + 1}. ${item.description} - ${item.
         // Анализ изображений через Tesseract + парсинг
         if (isImage) {
           setIsProcessingOCR(true);
-          toast.info('🔍 Распознаю текст...');
+          toast.info('🔍 Улучшаю качество и сканирую...');
           
           try {
-            // 1. Распознаём текст через Tesseract
-            const result = await Tesseract.recognize(fileUrl, 'rus+eng', {
-              logger: () => {} // Отключаем логи
+            // 0. Предобработка (Super Scanner Lens)
+            const processedImage = await preprocessImage(file);
+
+            // 1. Распознаём текст через Tesseract с настройками
+            const result = await Tesseract.recognize(processedImage, 'rus+eng', {
+              logger: () => {},
+              // Настройки для улучшения качества
+              // Ограничиваем символы только тем, что бывает в чеках
+              // tessedit_char_whitelist: '0123456789.,-абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ₽$€/:' 
+              // (whitelist иногда работает слишком агрессивно, лучше без него если шрифт нестандартный, но добавим базовые параметры)
             });
             const ocrText = result.data.text;
             
+            console.log('Raw Tesseract:', ocrText); // Для отладки
+
             if (!ocrText || ocrText.trim().length < 5) {
-              toast.error('Не удалось распознать текст на изображении');
+              toast.error('Не удалось прочитать текст. Попробуйте другое фото.');
               setIsProcessingOCR(false);
               return;
             }
             
-            toast.info('📝 Парсю операции...');
+            toast.info('📝 Разбираю операции...');
             
             // 2. Отправляем текст на сервер для парсинга
             const response = await fetch('/api/analyze-image', {
