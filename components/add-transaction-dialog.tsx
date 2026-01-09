@@ -107,7 +107,7 @@ function parseRussianNumber(text: string): number | null {
 // Делает изображение черно-белым и повышает контраст для лучшего OCR
 const preprocessImage = async (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
-    const img = new Image();
+    const img = document.createElement('img') as HTMLImageElement;
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');

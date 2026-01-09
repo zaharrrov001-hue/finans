@@ -1,12 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { Nunito } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
-
-const nunito = Nunito({
-  subsets: ['cyrillic', 'latin'],
-  variable: '--font-nunito',
-});
 
 export const metadata: Metadata = {
   title: 'Финансы — Личный учёт',
@@ -34,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className={`${nunito.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         {children}
         <Toaster position="top-center" richColors />
       </body>
